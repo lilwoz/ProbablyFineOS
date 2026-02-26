@@ -89,7 +89,8 @@ $(IMG): $(STAGE1) $(STAGE2) $(KERNEL) | $(BUILD)
 # --------------------------------------------------------------
 run: $(IMG)
 	$(QEMU) \
-	  -drive format=raw,file=$(IMG),if=floppy \
+	  -drive format=raw,file=$(IMG),index=0,media=disk \
+	  -boot order=c \
 	  -m 64M \
 	  -vga std \
 	  -name "ProbablyFineOS"
@@ -99,7 +100,8 @@ debug: $(IMG)
 	@echo "Launching QEMU (paused). Connect GDB with:"
 	@echo "  gdb -ex 'target remote localhost:1234' -ex 'set arch i386'"
 	$(QEMU) \
-	  -drive format=raw,file=$(IMG),if=floppy \
+	  -drive format=raw,file=$(IMG),index=0,media=disk \
+	  -boot order=c \
 	  -m 64M \
 	  -vga std \
 	  -name "ProbablyFineOS (debug)" \

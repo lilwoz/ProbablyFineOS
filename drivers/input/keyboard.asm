@@ -30,6 +30,8 @@ SC_BREAK    equ 0x80
 ; keyboard_init — set up keyboard driver
 ; ==============================================================
 keyboard_init:
+    push    eax
+
     ; Flush any stale bytes in the PS/2 output buffer
     .flush:
         in      al, PS2_STATUS_PORT
@@ -38,6 +40,51 @@ keyboard_init:
         in      al, PS2_DATA_PORT
         jmp     .flush
     .flush_done:
+
+    ; --- Step 1: configure i8042 command byte -------------------
+    ; Read (cmd 0x20), then write back (cmd 0x60) with:
+    ;   bit 0 = 1  keyboard IRQ enabled
+    ;   bit 4 = 0  keyboard clock enabled  (1 = disabled)
+    ;   bit 6 = 0  i8042 translation OFF   (we use native set 1 below)
+    ; NOTE: ps2_wait_write / ps2_wait_read CLOBBER AL.
+    ps2_wait_write
+    mov     al, 0x20                ; read i8042 command byte
+    out     PS2_CMD_PORT, al
+    ps2_wait_read
+    in      al, PS2_DATA_PORT       ; AL = current command byte
+    or      al, 0x01                ; bit 0 ON  (kbd IRQ)
+    and     al, 0xAF                ; bit 4 OFF (clock), bit 6 OFF (translation)
+    push    eax                     ; save
+    ps2_wait_write
+    mov     al, 0x60                ; write i8042 command byte
+    out     PS2_CMD_PORT, al
+    ps2_wait_write
+    pop     eax                     ; restore modified byte into AL
+    out     PS2_DATA_PORT, al
+
+    ; --- Step 2: tell keyboard to use scan code SET 1 natively --
+    ; With i8042 translation disabled (bit 6 = 0 above), the
+    ; keyboard must send set 1 itself.  Command 0xF0 0x01 does this.
+    ps2_wait_write
+    mov     al, 0xF0                ; "select scan code set" command
+    out     KBD_DATA_PORT, al
+    ps2_wait_read
+    in      al, PS2_DATA_PORT       ; discard ACK (0xFA)
+
+    ps2_wait_write
+    mov     al, 0x01                ; select set 1
+    out     KBD_DATA_PORT, al
+    ps2_wait_read
+    in      al, PS2_DATA_PORT       ; discard ACK (0xFA)
+
+    ; Flush buffer one more time to clear any leftover ACKs
+    .flush2:
+        in      al, PS2_STATUS_PORT
+        test    al, 0x01
+        jz      .flush2_done
+        in      al, PS2_DATA_PORT
+        jmp     .flush2
+    .flush2_done:
 
     ; Install IRQ1 handler into IDT vector 0x21
     lea     eax, [irq1_keyboard_handler]
@@ -48,6 +95,7 @@ keyboard_init:
     mov     al, 1                   ; IRQ 1
     call    pic_unmask_irq
 
+    pop     eax
     ret
 
 ; ==============================================================
