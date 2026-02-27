@@ -142,6 +142,18 @@ shell_dispatch:
     call    shell_strcmp
     jz      .cmd_mouse
 
+    lea     edi, [sh_cmd_panic]
+    call    shell_strcmp
+    jz      .cmd_panic
+
+    lea     edi, [sh_cmd_ticks]
+    call    shell_strcmp
+    jz      .cmd_ticks
+
+    lea     edi, [sh_cmd_threads]
+    call    shell_strcmp
+    jz      .cmd_threads
+
     ; unknown
     lea     eax, [sh_unknown]
     push    eax
@@ -189,6 +201,63 @@ shell_dispatch:
 
     mov     al, 0x0A
     call    vga_putc
+    jmp     .out
+
+.cmd_panic:
+    lea     eax, [sh_panic_msg]
+    push    eax
+    call    vga_puts
+    add     esp, 4
+    ; Trigger divide by zero exception
+    xor     edx, edx
+    xor     eax, eax
+    div     edx                 ; Divide by zero!
+    jmp     .out
+
+.cmd_ticks:
+    lea     eax, [sh_ticks_msg]
+    push    eax
+    call    vga_puts
+    add     esp, 4
+
+    call    timer_get_ticks
+    call    vga_print_dec
+
+    lea     eax, [sh_ticks_suffix]
+    push    eax
+    call    vga_puts
+    add     esp, 4
+    jmp     .out
+
+.cmd_threads:
+    lea     eax, [sh_threads_msg]
+    push    eax
+    call    vga_puts
+    add     esp, 4
+
+    ; Create test thread A
+    lea     eax, [test_thread_a]
+    call    thread_create
+    cmp     eax, -1
+    je      .thread_error
+
+    ; Create test thread B
+    lea     eax, [test_thread_b]
+    call    thread_create
+    cmp     eax, -1
+    je      .thread_error
+
+    lea     eax, [sh_threads_ok]
+    push    eax
+    call    vga_puts
+    add     esp, 4
+    jmp     .out
+
+.thread_error:
+    lea     eax, [sh_threads_err]
+    push    eax
+    call    vga_puts
+    add     esp, 4
     jmp     .out
 
 .out:
@@ -254,14 +323,26 @@ sh_unknown  db 'Unknown command. Try "help".', 0x0A, 0
 sh_helptext db 'Commands:', 0x0A
             db '  help    show this list', 0x0A
             db '  clear   clear the screen', 0x0A
-            db '  mouse   print mouse position and buttons', 0x0A, 0
+            db '  mouse   print mouse position and buttons', 0x0A
+            db '  ticks   show system timer ticks (10ms each)', 0x0A
+            db '  threads spawn test threads (multitasking demo)', 0x0A
+            db '  panic   test exception handler (div by zero)', 0x0A, 0
 sh_mouse_x  db 'Mouse X=', 0
 sh_mouse_y  db ' Y=', 0
 sh_mouse_btn db ' Btn=0x', 0
+sh_panic_msg db 'Testing exception handler...', 0x0A, 0
+sh_ticks_msg db 'Timer ticks: ', 0
+sh_ticks_suffix db ' (100 Hz, 10ms each)', 0x0A, 0
+sh_threads_msg db 'Creating test threads...', 0x0A, 0
+sh_threads_ok db 'Test threads created successfully.', 0x0A, 0
+sh_threads_err db 'Failed to create threads!', 0x0A, 0
 
-sh_cmd_help  db 'help',  0
-sh_cmd_clear db 'clear', 0
-sh_cmd_mouse db 'mouse', 0
+sh_cmd_help    db 'help',  0
+sh_cmd_clear   db 'clear', 0
+sh_cmd_mouse   db 'mouse', 0
+sh_cmd_ticks   db 'ticks', 0
+sh_cmd_threads db 'threads', 0
+sh_cmd_panic   db 'panic', 0
 
 ; Input buffer
 shell_input_buf: rb SHELL_BUF_SIZE

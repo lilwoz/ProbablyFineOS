@@ -68,3 +68,46 @@ VBE_PhysBasePtr     equ 40    ; physical address of linear framebuffer
 
 ; VESA info is saved at this fixed address by stage2 (below kernel load)
 VESA_INFO_ADDR      equ 0x00008000
+
+; -------------------------------------------------------------
+; Thread Control Block (TCB) structure
+; Each thread has one TCB containing all thread state
+; -------------------------------------------------------------
+; Thread states
+THREAD_STATE_READY      equ 0
+THREAD_STATE_RUNNING    equ 1
+THREAD_STATE_BLOCKED    equ 2
+THREAD_STATE_DEAD       equ 3
+
+; TCB field offsets (total size: 592 bytes + alignment)
+TCB_TID             equ 0       ; Thread ID (4 bytes)
+TCB_STATE           equ 4       ; Thread state (4 bytes)
+TCB_QUANTUM         equ 8       ; Remaining quantum in ticks (4 bytes)
+TCB_ESP             equ 12      ; Saved stack pointer (4 bytes)
+TCB_KSTACK_BASE     equ 16      ; Base of kernel stack (4 bytes)
+TCB_KSTACK_SIZE     equ 20      ; Size of kernel stack (4 bytes)
+
+; Saved register context (pushad order + segments)
+TCB_EAX             equ 24      ; 4 bytes
+TCB_ECX             equ 28      ; 4 bytes
+TCB_EDX             equ 32      ; 4 bytes
+TCB_EBX             equ 36      ; 4 bytes
+TCB_EBP             equ 40      ; 4 bytes (original ESP not saved in pushad)
+TCB_ESI             equ 44      ; 4 bytes
+TCB_EDI             equ 48      ; 4 bytes
+TCB_EIP             equ 52      ; 4 bytes (return address)
+TCB_EFLAGS          equ 56      ; 4 bytes
+TCB_DS              equ 60      ; 2 bytes (segment registers)
+TCB_ES              equ 62      ; 2 bytes
+TCB_FS              equ 64      ; 2 bytes
+TCB_GS              equ 66      ; 2 bytes
+
+; FPU/SSE state buffer (must be 16-byte aligned)
+TCB_FPU_STATE       equ 80      ; 512 bytes for FXSAVE/FXRSTOR
+
+; Thread linkage (for scheduler queues)
+TCB_NEXT            equ 592     ; Pointer to next TCB in queue (4 bytes)
+TCB_PREV            equ 596     ; Pointer to previous TCB (4 bytes)
+
+; Total TCB size (must be multiple of 16 for FXSAVE alignment)
+TCB_SIZE            equ 608     ; 600 rounded up to next multiple of 16

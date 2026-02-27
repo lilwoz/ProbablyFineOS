@@ -35,12 +35,28 @@ kernel_entry:
     call    gdt_init                ; kernel/gdt.asm
     ; After gdt_init: CS=GDT_KCODE_SEG, DS/ES/...=GDT_KDATA_SEG
 
+    ; ---- FPU (initialize FPU and check for FXSR support) ----
+    call    fpu_init                ; kernel/fpu.asm
+
     ; ---- IDT (set up interrupt/exception handlers) -----------
     call    idt_init                ; kernel/idt.asm
+    call    install_exception_handlers ; kernel/exceptions.asm (CPU exceptions 0-31)
     ; After idt_init: STI is called — interrupts enabled
 
     ; ---- PIC (remap IRQs, mask all) --------------------------
     call    pic_init                ; kernel/pic.asm
+
+    ; ---- Thread subsystem (create idle thread) ---------------
+    ; MUST be initialized BEFORE PIT to avoid timer interrupts before ready
+    call    thread_init             ; kernel/thread.asm
+
+    ; ---- Scheduler (initialize ready queue) ------------------
+    call    scheduler_init          ; kernel/scheduler.asm
+
+    ; ---- PIT (system timer, 100 Hz) -------------------------
+    ; Initialize AFTER threads/scheduler are ready
+    mov     eax, 100                ; 100 Hz = 10ms interval
+    call    pit_init                ; kernel/pit.asm
 
     ; ---- Video (clear screen, show banner) -------------------
     call    vga_init                ; drivers/video/vga.asm
@@ -62,10 +78,15 @@ kernel_entry:
 ; Sub-system modules (included in one flat binary)
 ; ==============================================================
 include 'gdt.asm'
+include 'fpu.asm'
 include 'idt.asm'
+include 'exceptions.asm'
 include 'pic.asm'
 include '../drivers/video/vga.asm'
 include '../drivers/video/vesa.asm'
+include 'pit.asm'
+include 'thread.asm'
+include 'scheduler.asm'
 include '../drivers/input/keyboard.asm'
 include '../drivers/input/mouse.asm'
 include 'shell.asm'

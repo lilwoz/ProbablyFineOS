@@ -35,6 +35,7 @@ vga_clear:
     push    ecx
     push    edi
 
+    cld                         ; Ensure DF=0 for rep stosd
     mov     edi, VGA_TEXT_BASE
     movzx   eax, byte [vga_attr]
     shl     eax, 8
