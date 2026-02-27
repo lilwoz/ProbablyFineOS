@@ -5,9 +5,7 @@ Defines x86 architecture-specific requirements for ProbablyFineOS, including CPU
 
 ## Implementation Note
 Current implementation targets **x86 32-bit protected mode** as foundation. 64-bit long mode support is planned for future but not yet implemented. This spec documents both current (32-bit) and planned (64-bit) requirements.
-
 ## Requirements
-
 ### Requirement: Exception Handling (32-bit Implementation)
 The system SHALL handle all CPU exceptions (vectors 0-31) by:
 - Installing ISR for each exception in IDT
@@ -26,6 +24,7 @@ Exception ISRs SHALL distinguish between exceptions with/without error codes:
 - **AND** ISR saves all registers (EAX-EDI, ESP, EIP, EFLAGS)
 - **AND** displays exception details and register dump
 - **AND** halts system with freeze loop
+
 ### Requirement: x86_64 Long Mode Support
 The system SHALL target x86_64 CPUs with long mode, SYSCALL/SYSRET, NX bit, and 4-level paging support.
 
@@ -64,4 +63,31 @@ Userland MAY use SSE2 instructions (state saved on context switch).
 - **WHEN** Kernel code is compiled
 - **THEN** compiler flags include `-mno-sse -mno-mmx -mno-avx` to prevent FP usage
 - **AND** if kernel accidentally uses FP instructions, CPU raises #UD (invalid opcode) exception
+
+### Requirement: Exception Handler Installation
+The kernel SHALL install interrupt service routines (ISRs) for all CPU exceptions (vectors 0-31) in the IDT.
+
+Exception handlers SHALL save full register state before calling C exception handler.
+
+#### Scenario: Exception ISR installation
+- **WHEN** Kernel initializes IDT
+- **THEN** it installs ISRs for exceptions 0-31 using `idt_set_gate(vector, handler_addr)`
+- **AND** ISRs with error code (8, 10-14, 17): CPU pushes error code before calling ISR
+- **AND** ISRs without error code: ISR pushes dummy error code (0) for consistent stack layout
+- **AND** all ISRs jump to common handler that saves registers (pushad, push_segs)
+
+### Requirement: Exception Register Dump
+Exception handlers SHALL print diagnostic information including exception number, EIP, error code, and register dump before halting.
+
+For page fault (exception 14), handler SHALL read CR2 register (faulting address) and include in dump.
+
+#### Scenario: Page fault exception handling
+- **WHEN** CPU triggers page fault (exception 14)
+- **THEN** exception handler prints: "KERNEL PANIC: Page Fault"
+- **AND** prints EIP (instruction pointer that caused fault)
+- **AND** prints error code (present bit, write bit, user bit)
+- **AND** reads CR2 register: `mov eax, cr2`
+- **AND** prints "Faulting address: 0xXXXXXXXX" (CR2 value)
+- **AND** prints register dump: EAX-EDI, segment registers, stack frame
+- **AND** halts system with `freeze` (cli + hlt loop)
 
